@@ -1,8 +1,8 @@
 #include <iostream>
 #include <bits/this_thread_sleep.h>
 
-#include "libs/DrawerIO.h"
-#include "libs/StringUtils.h"
+#include "src/DrawerIO.h"
+#include "src/StringUtils.h"
 
 void PrintHelp() {
     std::cout << "╔═══════════════════════════════════════════════════════════════════════════╗" << std::endl;

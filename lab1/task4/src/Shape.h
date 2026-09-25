@@ -1,12 +1,17 @@
 #pragma once
 #include <memory>
 #include "Common/Color.h"
+#include "Common/Observer.h"
 #include "ShapeGeometry/CRTPShapeGeometry.h"
 
 namespace shapes {
 
-class Shape {
+enum class EventType {ColorChanged, PositionChanged, GeometryChanged};
+
+class Shape : public Observable<Shape, EventType> {
 public:
+    using EventType = shapes::EventType;
+
     Shape(std::unique_ptr<ShapeGeometry> geometry, Color c);
     [[nodiscard]] std::string GetTypeName() const;
     void SetColor(Color newColor);

@@ -11,12 +11,16 @@ public:
 class Color {
 public:
     Color() = default;
+    ~Color() = default;
+
     Color(uint8_t red, uint8_t green, uint8_t blue);
     std::string ToString();
     static Color FromString(const std::string& str);
     [[nodiscard]] uint8_t Red() const;
     [[nodiscard]] uint8_t Green() const;
     [[nodiscard]] uint8_t Blue() const;
+
+    Color operator<=>(const Color& color) const = default;
 private:
     uint8_t m_red = 0;
     uint8_t m_green = 0;
