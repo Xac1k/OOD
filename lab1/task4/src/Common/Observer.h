@@ -1,6 +1,8 @@
 #pragma once
 #include <algorithm>
+#include <emmintrin.h>
 #include <map>
+#include <utility>
 #include <vector>
 #include "Deletable.h"
 
@@ -24,13 +26,60 @@ public:
         static_assert(std::is_same_v<EventType, typename Derived::EventType>, "Event type of Derived class need to be the same os EventType of template.");
     }
 
-    void Subscribe(const EventType& event, Observer<Derived>& observer) {
+    class Subscription {
+    public:
+        struct State {
+            Observer<Derived>& m_observer;
+            Observable& m_observable;
+            EventType m_event;
+            bool m_isActive = true;
+        };
+
+        Subscription(const std::shared_ptr<State>& state)
+        : m_state(state)
+        {}
+
+        Subscription& operator=(const Subscription& other) = delete;
+        Subscription& operator=(Subscription& other) = delete;
+        Subscription& operator=(Subscription&& other) noexcept {
+            if (this != &other) {
+                std::swap(m_state, other.m_state);
+
+                other.m_state->m_isActive = false;
+            }
+
+            return *this;
+        }
+
+        void Disconnect() {
+            if (!m_state->m_isActive) {
+                m_state->m_isActive = false;
+                m_state->m_observable.Unsubscribe(m_state->m_event, m_state->m_observer);
+            }
+        }
+
+        ~Subscription() {
+            Disconnect();
+        }
+    private:
+        std::shared_ptr<State> m_state;
+    };
+
+    Subscription Subscribe(const EventType& event, Observer<Derived>& observer) {
         for (auto listener : listeners[event]) {
-            if (listener == &observer) return;
+            if (listener == &observer) {
+                std::ranges::find(subscriptions.begin(), subscriptions.end(), []() {});
+                return
+            };
         }
 
         observer.Remedy();
         listeners[event].push_back(&observer);
+
+        auto subscriptionState = std::make_shared<typename Subscription::State>(&observer, this, event);
+        subscriptions.push_back(subscriptionState);
+
+        return Subscription(subscriptionState);
     }
 
     void Unsubscribe(const EventType& event, Observer<Derived>& observer) {
@@ -63,4 +112,5 @@ public:
 
 private:
     std::map<EventType, std::vector<Observer<Derived>*>> listeners;
+    std::vector<std::shared_ptr<typename Subscription::State>> subscriptions;
 };
