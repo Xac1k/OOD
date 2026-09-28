@@ -94,6 +94,44 @@ public:
 private:
     Shape* m_shape;
 };
+class OnGeometryChangedUnsubscribeOtherObserver : public Observer<Shape> {
+public:
+    explicit OnGeometryChangedUnsubscribeOtherObserver(Shape* shape, Observer<Shape>& observer)
+    : m_shape(shape)
+    , m_observer(observer) {
+        if(&observer == this) {
+            throw std::invalid_argument("The pointer on observer must be different from this pointer.");
+        }
+    };
+    int count = 0;
+    void Update(const Shape& data) override {
+        count++;
+        m_shape->Unsubscribe(Shape::EventType::GeometryChanged, m_observer);
+    }
+
+private:
+    Shape* m_shape;
+    Observer& m_observer;
+};
+class OnGeometryChangedSubscribeObserver : public Observer<Shape> {
+public:
+    explicit OnGeometryChangedSubscribeObserver(Shape* shape, Observer& observer)
+    : m_shape(shape)
+    , m_observer(observer) {
+        if(&observer == this) {
+            throw std::invalid_argument("The pointer on observer must be different from this pointer.");
+        }
+    };
+    int count = 0;
+    void Update(const Shape& data) override {
+        count++;
+        m_shape->Subscribe(Shape::EventType::GeometryChanged, m_observer);
+    }
+
+private:
+    Shape* m_shape;
+    Observer& m_observer;
+};
 
 const Color Blue = {0, 0, 255};
 const Color Red = {255, 0, 0};
@@ -298,25 +336,6 @@ TEST_CASE("Наблюдатель Shape получает уведомление 
     REQUIRE(geomObs.count == 1);
 }
 
-TEST_CASE("Отписка от наблюдения за объектом внутри Update Observer") {
-    auto picture = MakePicture();
-    AddStubShape(*picture, "s1");
-    auto& shape = picture->GetShape("s1");
-
-    OnGeometryChangedUnsubscribeObserver deletedOnUpdate(&shape);
-    OnGeometryChangedObserver geomObs;
-    shape.Subscribe(Shape::EventType::GeometryChanged, deletedOnUpdate);
-    shape.Subscribe(Shape::EventType::GeometryChanged, geomObs);
-
-    REQUIRE_NOTHROW(shape.SetGeometry(std::make_unique<StubGeometry>()));
-    REQUIRE(deletedOnUpdate.count == 1);
-    REQUIRE(geomObs.count == 1);
-
-    REQUIRE_NOTHROW(shape.SetGeometry(std::make_unique<StubGeometry>()));
-    REQUIRE(deletedOnUpdate.count == 1);
-    REQUIRE(geomObs.count == 2);
-}
-
 TEST_CASE("Копируется Picture, но не Observers") {
     auto picture = MakePicture();
 
@@ -365,4 +384,85 @@ TEST_CASE("Копирование Picture и подписка на копию") 
     REQUIRE(o3.count == 1);
     REQUIRE(o4.count == 1);
     REQUIRE(o5.count == 1);
+}
+
+//Проверить по тестам
+TEST_CASE("Отписка от наблюдения за объектом внутри Update Observer") {
+    auto picture = MakePicture();
+    AddStubShape(*picture, "s1");
+    auto& shape = picture->GetShape("s1");
+
+    OnGeometryChangedUnsubscribeObserver deletedOnUpdate(&shape);
+    OnGeometryChangedObserver geomObs;
+    shape.Subscribe(Shape::EventType::GeometryChanged, deletedOnUpdate);
+    shape.Subscribe(Shape::EventType::GeometryChanged, geomObs);
+
+    REQUIRE_NOTHROW(shape.SetGeometry(std::make_unique<StubGeometry>()));
+    REQUIRE(deletedOnUpdate.count == 1);
+    REQUIRE(geomObs.count == 1);
+
+    REQUIRE_NOTHROW(shape.SetGeometry(std::make_unique<StubGeometry>()));
+    REQUIRE(deletedOnUpdate.count == 1);
+    REQUIRE(geomObs.count == 2);
+}
+
+TEST_CASE("Отписка второго наблюдателя от объекта внутри Update Observer") {
+    auto picture = MakePicture();
+    AddStubShape(*picture, "s1");
+    auto& shape = picture->GetShape("s1");
+
+    OnGeometryChangedObserver geomObs;
+    OnGeometryChangedUnsubscribeOtherObserver deleteOnUpdate(&shape, geomObs);
+    shape.Subscribe(Shape::EventType::GeometryChanged, deleteOnUpdate);
+    shape.Subscribe(Shape::EventType::GeometryChanged, geomObs);
+
+    REQUIRE_NOTHROW(shape.SetGeometry(std::make_unique<StubGeometry>()));
+    REQUIRE(deleteOnUpdate.count == 1);
+    REQUIRE(geomObs.count == 0);
+
+    REQUIRE_NOTHROW(shape.SetGeometry(std::make_unique<StubGeometry>()));
+    REQUIRE(deleteOnUpdate.count == 2);
+    REQUIRE(geomObs.count == 0);
+}
+
+TEST_CASE("Подписка второго наблюдателя на объект внутри Update Observer") {
+    auto picture = MakePicture();
+    AddStubShape(*picture, "s1");
+    auto& shape = picture->GetShape("s1");
+
+    OnGeometryChangedObserver geomObs;
+    OnGeometryChangedSubscribeObserver subscribeOnUpdate(&shape, geomObs);
+    shape.Subscribe(Shape::EventType::GeometryChanged, subscribeOnUpdate);
+
+    REQUIRE_NOTHROW(shape.SetGeometry(std::make_unique<StubGeometry>()));
+    REQUIRE(subscribeOnUpdate.count == 1);
+    REQUIRE(geomObs.count == 0);
+
+    REQUIRE_NOTHROW(shape.SetGeometry(std::make_unique<StubGeometry>()));
+    REQUIRE(subscribeOnUpdate.count == 2);
+    REQUIRE(geomObs.count == 1);
+}
+
+TEST_CASE("Отписка наблюдателя и его подписка во время одной рассылки") {
+    auto picture = MakePicture();
+    AddStubShape(*picture, "s1");
+    auto& shape = picture->GetShape("s1");
+
+    OnGeometryChangedObserver geomObs;
+    OnGeometryChangedUnsubscribeOtherObserver deleteOnUpdate(&shape, geomObs);
+    OnGeometryChangedSubscribeObserver subscribeOnUpdate(&shape, geomObs);
+    shape.Subscribe(Shape::EventType::GeometryChanged, deleteOnUpdate);
+    shape.Subscribe(Shape::EventType::GeometryChanged, geomObs);
+    shape.Subscribe(Shape::EventType::GeometryChanged, subscribeOnUpdate);
+
+    REQUIRE_NOTHROW(shape.SetGeometry(std::make_unique<StubGeometry>()));
+    REQUIRE(deleteOnUpdate.count == 1);
+    REQUIRE(subscribeOnUpdate.count == 1);
+    REQUIRE(geomObs.count == 0);
+
+    shape.Unsubscribe(Shape::EventType::GeometryChanged, deleteOnUpdate);
+    shape.Unsubscribe(Shape::EventType::GeometryChanged, subscribeOnUpdate);
+
+    REQUIRE_NOTHROW(shape.SetGeometry(std::make_unique<StubGeometry>()));
+    REQUIRE(geomObs.count == 1);
 }

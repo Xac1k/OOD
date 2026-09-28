@@ -2,9 +2,10 @@
 #include <algorithm>
 #include <map>
 #include <vector>
+#include "Deletable.h"
 
 template<typename Subject>
-class Observer {
+class Observer : public Deletable {
 public:
     virtual void Update(const Subject& data) = 0;
     virtual ~Observer() = default;
@@ -28,22 +29,35 @@ public:
             if (listener == &observer) return;
         }
 
+        observer.Remedy();
         listeners[event].push_back(&observer);
     }
 
     void Unsubscribe(const EventType& event, Observer<Derived>& observer) {
-        auto it = listeners.find(event);
-        if (it == listeners.end()) return;
-        auto& vec = it->second;
-        vec.erase(std::remove(vec.begin(), vec.end(), &observer), vec.end());
+        auto eventIt = listeners.find(event);
+        if (eventIt == listeners.end()) return;
+        auto& eventListeners = eventIt->second;
+
+        auto observerIt = std::find(eventListeners.begin(), eventListeners.end(), &observer);
+        if (observerIt == eventListeners.end()) return;
+
+        (*observerIt)->Delete();
+
+        eventListeners.erase(
+            std::remove(eventListeners.begin(), eventListeners.end(), &observer),
+            eventListeners.end()
+        );
     }
 
-    void Notify(const EventType& event) const {
+    void Notify(const EventType& event) {
         auto it = listeners.find(event);
         if (it == listeners.end()) return;
+
         auto copiedListeners = it->second;
         for (auto& listener : copiedListeners) {
-            listener->Update(static_cast<const Derived&>(*this));
+            if (!listener->IsDeleted()) {
+                listener->Update(static_cast<const Derived&>(*this));
+            }
         }
     }
 

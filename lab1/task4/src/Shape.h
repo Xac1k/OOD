@@ -15,7 +15,7 @@ public:
     Shape(std::unique_ptr<ShapeGeometry> geometry, Color c);
     [[nodiscard]] std::string GetTypeName() const;
     void SetColor(Color newColor);
-    void MoveShape(double dx, double dy) const;
+    void MoveShape(double dx, double dy);
     void SetGeometry(std::unique_ptr<ShapeGeometry>);
     [[nodiscard]] std::vector<std::string> GetParams() const;
     [[nodiscard]] std::unique_ptr<Shape> Clone() const;

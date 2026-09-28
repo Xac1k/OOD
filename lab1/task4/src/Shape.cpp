@@ -19,7 +19,7 @@ void shapes::Shape::SetColor(const Color newColor) {
     Notify(EventType::ColorChanged);
 }
 
-void shapes::Shape::MoveShape(const double dx, const double dy) const {
+void shapes::Shape::MoveShape(const double dx, const double dy) {
     m_geometry->MoveShape(dx, dy);
     Notify(EventType::PositionChanged);
 }
