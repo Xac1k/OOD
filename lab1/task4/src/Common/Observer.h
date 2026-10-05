@@ -2,9 +2,15 @@
 #include <algorithm>
 #include <emmintrin.h>
 #include <map>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 #include "Deletable.h"
+
+template<typename T>
+concept HasEnumEventType = requires {
+    typename T::EventType;
+} && std::is_enum_v<typename T::EventType>;
 
 template<typename Subject>
 class Observer : public Deletable {
@@ -13,10 +19,19 @@ public:
     virtual ~Observer() = default;
 };
 
-template<typename T>
-concept HasEnumEventType = requires {
-    typename T::EventType;
-} && std::is_enum_v<typename T::EventType>;
+template<typename Derived, typename EventType>
+class Observable;
+
+template<typename Derived, typename EventType>
+class AutoObserver : public Observer<Derived> {
+public:
+    using Subscription = Observable<Derived, EventType>::Subscription;
+
+    AutoObserver(Observable<Derived, EventType>& observable, EventType event)
+    : m_subscription(observable.Subscribe(event, *this)) {}
+private:
+    Subscription m_subscription;
+};
 
 template<typename Derived, typename EventType>
 class Observable {
@@ -26,76 +41,75 @@ public:
         static_assert(std::is_same_v<EventType, typename Derived::EventType>, "Event type of Derived class need to be the same os EventType of template.");
     }
 
+    struct Connection {
+        Observer<Derived>* observer = nullptr;
+        Observable* observable = nullptr;
+        EventType event{};
+        bool active = true;
+    };
+
     class Subscription {
     public:
-        struct State {
-            Observer<Derived>& m_observer;
-            Observable& m_observable;
-            EventType m_event;
-            bool m_isActive = true;
-        };
+        explicit Subscription(std::shared_ptr<Connection> connection)
+        : m_connection(std::move(connection)) {}
 
-        Subscription(const std::shared_ptr<State>& state)
-        : m_state(state)
-        {}
+        Subscription(Subscription&& other) noexcept
+        : m_connection(std::move(other.m_connection)) {}
 
         Subscription& operator=(const Subscription& other) = delete;
         Subscription& operator=(Subscription& other) = delete;
         Subscription& operator=(Subscription&& other) noexcept {
             if (this != &other) {
-                std::swap(m_state, other.m_state);
-
-                other.m_state->m_isActive = false;
+                Disconnect();
+                m_connection = std::move(other.m_connection);
             }
-
             return *this;
         }
 
         void Disconnect() {
-            if (!m_state->m_isActive) {
-                m_state->m_isActive = false;
-                m_state->m_observable.Unsubscribe(m_state->m_event, m_state->m_observer);
+            if (!m_connection) return;
+
+            if (m_connection->active) {
+                m_connection->active = false;
+                if (m_connection->observable) {
+                    m_connection->observable->Unsubscribe(m_connection->event, *m_connection->observer);
+                }
             }
+
+            m_connection.reset();
+        }
+
+        [[nodiscard]] bool IsActive() const {
+            return m_connection && m_connection->active;
         }
 
         ~Subscription() {
             Disconnect();
         }
     private:
-        std::shared_ptr<State> m_state;
+        std::shared_ptr<Connection> m_connection;
     };
 
+    using ObserverPointer = Observer<Derived>*;
+
     Subscription Subscribe(const EventType& event, Observer<Derived>& observer) {
-        for (auto listener : listeners[event]) {
-            if (listener == &observer) {
-                std::ranges::find(subscriptions.begin(), subscriptions.end(), []() {});
-                return
-            };
+        auto key = std::make_pair(&observer, event);
+
+        auto it = activeConnections.find(key);
+        if (it != activeConnections.end()) {
+            if (auto existing = it->second.lock()) {
+                return Subscription(existing);
+            }
+            activeConnections.erase(it);
         }
 
-        observer.Remedy();
-        listeners[event].push_back(&observer);
-
-        auto subscriptionState = std::make_shared<typename Subscription::State>(&observer, this, event);
-        subscriptions.push_back(subscriptionState);
-
-        return Subscription(subscriptionState);
+        AddListener(event, observer);
+        return Subscription(CreateConnection(event, observer));
     }
 
     void Unsubscribe(const EventType& event, Observer<Derived>& observer) {
-        auto eventIt = listeners.find(event);
-        if (eventIt == listeners.end()) return;
-        auto& eventListeners = eventIt->second;
-
-        auto observerIt = std::find(eventListeners.begin(), eventListeners.end(), &observer);
-        if (observerIt == eventListeners.end()) return;
-
-        (*observerIt)->Delete();
-
-        eventListeners.erase(
-            std::remove(eventListeners.begin(), eventListeners.end(), &observer),
-            eventListeners.end()
-        );
+        BreakConnection(event, observer);
+        DeleteListener(event, observer);
     }
 
     void Notify(const EventType& event) {
@@ -110,7 +124,56 @@ public:
         }
     }
 
+    ~Observable() {
+        BreakAllConnections();
+        activeConnections.clear();
+        listeners.clear();
+    }
 private:
-    std::map<EventType, std::vector<Observer<Derived>*>> listeners;
-    std::vector<std::shared_ptr<typename Subscription::State>> subscriptions;
+    std::map<EventType, std::vector<ObserverPointer>> listeners;
+    std::map<std::pair<ObserverPointer, EventType>, std::weak_ptr<Connection>> activeConnections;
+
+    std::shared_ptr<Connection> CreateConnection(const EventType& event, Observer<Derived>& observer) {
+        auto key = std::make_pair(&observer, event);
+        auto conn = std::make_shared<Connection>(&observer, this, event, true);
+        activeConnections[key] = conn;
+
+        return conn;
+    }
+    void AddListener(const EventType& event, Observer<Derived>& observer) {
+        observer.Remedy();
+        listeners[event].push_back(&observer);
+    }
+    void BreakAllConnections() {
+        for (auto& [key, connectionObserver] : activeConnections) {
+            if (auto conn = connectionObserver.lock()) {
+                conn->active = false;
+                conn->observable = nullptr;
+            }
+        }
+    }
+    void BreakConnection(const EventType& event, Observer<Derived>& observer) {
+        auto key = std::make_pair(&observer, event);
+
+        auto it = activeConnections.find(key);
+        if (it != activeConnections.end()) {
+            if (auto conn = it->second.lock()) {
+                conn->active = false;
+                conn->observable = nullptr;
+            }
+            activeConnections.erase(it);
+        };
+    }
+    void DeleteListener(const EventType& event, Observer<Derived>& observer) {
+        auto& eventListeners = listeners[event];
+        auto observerIt = std::ranges::find(eventListeners, &observer);
+        if (observerIt == eventListeners.end())
+            return;
+
+        (*observerIt)->Delete();
+        eventListeners.erase(
+            std::remove(eventListeners.begin(), eventListeners.end(), &observer),
+            eventListeners.end()
+        );
+    }
 };

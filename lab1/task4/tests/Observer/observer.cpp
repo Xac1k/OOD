@@ -2,7 +2,6 @@
 #include <catch2/matchers/catch_matchers_vector.hpp>
 
 #include <memory>
-#include <sstream>
 #include <string>
 #include <vector>
 
