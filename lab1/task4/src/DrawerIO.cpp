@@ -23,21 +23,13 @@ void PrintErrorSignature(const std::string& signature) {
 }
 }
 
-DrawerIO::DrawerIO()
-: m_pictureObserver(std::cout)
-{
+DrawerIO::DrawerIO() {
     shapes::Picture picture(std::make_unique<gfx::SVGCanvas>(GenerateFileName(), 1920, 1080));
     m_picture = std::make_unique<shapes::Picture>(std::move(picture));
-    m_picture->Subscribe(shapes::Picture::EventType::ShapeChanged, m_pictureObserver);
-    m_picture->Subscribe(shapes::Picture::EventType::ShapeAdded, m_pictureObserver);
-    m_picture->Subscribe(shapes::Picture::EventType::ShapeRemoved, m_pictureObserver);
 
-}
-
-DrawerIO::~DrawerIO() {
-    m_picture->Unsubscribe(shapes::Picture::EventType::ShapeChanged, m_pictureObserver);
-    m_picture->Unsubscribe(shapes::Picture::EventType::ShapeAdded, m_pictureObserver);
-    m_picture->Unsubscribe(shapes::Picture::EventType::ShapeRemoved, m_pictureObserver);
+    m_subOnShapeAdded = m_picture->SubscribeOnShapeAdded([](const shapes::Shape& shape) {
+       std::cout << "Shape was added\n" << shape.GetTypeName() << std::endl;
+    });
 }
 
 void DrawerIO::HandleInput(const std::vector<std::string>& tokens) const {

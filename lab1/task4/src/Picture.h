@@ -4,6 +4,7 @@
 #include <string>
 #include "Shape.h"
 #include "Canvas/ICanvas.h"
+#include "Common/Event.h"
 #include "ShapeGeometry/CRTPShapeGeometry.h"
 
 namespace shapes
@@ -15,19 +16,11 @@ public:
     explicit ShapeExistenceException(const std::string& message) : std::runtime_error(message) {}
 };
 
-class ShapeObserver : public Observer<Shape> {
-public:
-    explicit ShapeObserver(Picture& picture);
-    void Update(const Shape& data) override;
 
-private:
-    Picture& m_picture;
-};
-enum class PictureEvenType { ShapeChanged, ShapeAdded, ShapeRemoved };
+class Picture {
+    DECLARE_EVENT(ShapeAdded, const Shape&)
 
-class Picture : public Observable<Picture, PictureEvenType> {
 public:
-    using EventType = PictureEvenType;
 
     explicit Picture(std::unique_ptr<gfx::ICanvas> canvas);
     void DrawPicture() noexcept;
@@ -46,7 +39,6 @@ public:
 private:
     std::map<std::string, std::unique_ptr<Shape>> m_doodles;
     std::unique_ptr<gfx::ICanvas> m_canvas;
-    ShapeObserver m_shapeObserver;
 };
 
 } // shapes

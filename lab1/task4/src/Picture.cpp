@@ -5,7 +5,6 @@
 
 shapes::Picture::Picture(std::unique_ptr<gfx::ICanvas> canvas)
 : m_canvas(std::move(canvas))
-, m_shapeObserver(*this)
 {}
 
 shapes::Shape& shapes::Picture::GetShape(const std::string& ID) const{
@@ -24,12 +23,8 @@ void shapes::Picture::AddShape(const std::string& ID, std::unique_ptr<Shape> sha
         throw ShapeExistenceException("[AddShape] Shape with ID: " + ID + " already exists.");
     }
 
-    shape->Subscribe(Shape::EventType::GeometryChanged, m_shapeObserver);
-    shape->Subscribe(Shape::EventType::ColorChanged, m_shapeObserver);
-    shape->Subscribe(Shape::EventType::PositionChanged, m_shapeObserver);
-
     m_doodles[ID] = std::move(shape);
-    Notify(EventType::ShapeAdded);
+    m_onShapeAdded.Notify(*m_doodles[ID]);
 }
 
 void shapes::Picture::ChangeColor(const std::string& ID, const Color newColor) {
@@ -87,11 +82,7 @@ void shapes::Picture::DeleteShape(const std::string& ID) {
         throw ShapeExistenceException("[DeleteShape] Shape with ID: " + ID + " don't exists.");
     }
 
-    doodleIter->second->Unsubscribe(Shape::EventType::PositionChanged, m_shapeObserver);
-    doodleIter->second->Unsubscribe(Shape::EventType::ColorChanged, m_shapeObserver);
-    doodleIter->second->Unsubscribe(Shape::EventType::GeometryChanged, m_shapeObserver);
     m_doodles.erase(doodleIter);
-    Notify(EventType::ShapeRemoved);
 }
 
 void shapes::Picture::MovePicture(const double dx, const double dy) noexcept {
@@ -138,11 +129,3 @@ shapes::Picture shapes::Picture::Clone(std::unique_ptr<gfx::ICanvas> canvas) {
 
     return clonedPicture;
 }
-
-shapes::ShapeObserver::ShapeObserver(Picture& picture) : m_picture(picture) {}
-
-void shapes::ShapeObserver::Update(const Shape& data) {
-    m_picture.Notify(Picture::EventType::ShapeChanged);
-}
-
-
