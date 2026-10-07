@@ -13,5 +13,4 @@ private:
         const std::vector<std::string>& tokens
     );
     std::unique_ptr<shapes::Picture> m_picture;
-    Event<void(const shapes::Shape&)>::Subscription m_subOnShapeAdded;
 };

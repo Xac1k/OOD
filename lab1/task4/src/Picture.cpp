@@ -24,7 +24,24 @@ void shapes::Picture::AddShape(const std::string& ID, std::unique_ptr<Shape> sha
     }
 
     m_doodles[ID] = std::move(shape);
-    m_onShapeAdded.Notify(*m_doodles[ID]);
+
+    m_shapeSubscriptions[ID].emplace_back(
+        m_doodles[ID]->SubscribeOnColorChanged([&](Color newColor) {
+            m_onColorChanged.Notify(ID, newColor);
+        })
+    );
+    m_shapeSubscriptions[ID].emplace_back(
+        m_doodles[ID]->SubscribeOnPositionChanged([&](double dx, double dy) {
+            m_onShapeMoved.Notify(ID, dx, dy);
+        })
+    );
+    m_shapeSubscriptions[ID].emplace_back(
+        m_doodles[ID]->SubscribeOnShapeGeometryChanged([&](ShapeGeometry* newGeometry) {
+            m_onShapeGeometryChanged.Notify(ID, newGeometry);
+        })
+    );
+
+    m_onShapeAdded.Notify(ID);
 }
 
 void shapes::Picture::ChangeColor(const std::string& ID, const Color newColor) {
@@ -83,12 +100,17 @@ void shapes::Picture::DeleteShape(const std::string& ID) {
     }
 
     m_doodles.erase(doodleIter);
+    erase_if(m_shapeSubscriptions, [&ID](const auto& subs) {
+        return subs.first == ID;
+    });
+    m_onShapeDeleted.Notify(ID);
 }
 
 void shapes::Picture::MovePicture(const double dx, const double dy) noexcept {
     for (auto& shape : m_doodles | std::views::values) {
         shape->MoveShape(dx, dy);
     }
+    m_onPictureMoved.Notify(dx, dy);
 }
 
 void shapes::Picture::MoveShape(const std::string& ID, const double dx, const double dy) {

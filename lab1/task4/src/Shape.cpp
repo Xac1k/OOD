@@ -16,17 +16,17 @@ std::string shapes::Shape::GetTypeName() const {
 
 void shapes::Shape::SetColor(const Color newColor) {
     m_color = newColor;
-    Notify(EventType::ColorChanged);
+    m_onColorChanged.Notify(newColor);
 }
 
 void shapes::Shape::MoveShape(const double dx, const double dy) {
     m_geometry->MoveShape(dx, dy);
-    Notify(EventType::PositionChanged);
+    m_onPositionChanged.Notify(dx, dy);
 }
 
 void shapes::Shape::SetGeometry(std::unique_ptr<ShapeGeometry> newGeometry) {
     m_geometry.swap(newGeometry);
-    Notify(EventType::GeometryChanged);
+    m_onShapeGeometryChanged.Notify(newGeometry.get());
 }
 
 std::vector<std::string> shapes::Shape::GetParams() const {

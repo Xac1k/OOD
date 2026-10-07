@@ -18,10 +18,13 @@ public:
 
 
 class Picture {
-    DECLARE_EVENT(ShapeAdded, const Shape&)
-
+    DECLARE_EVENT(ShapeAdded, const std::string&)
+    DECLARE_EVENT(ShapeMoved, const std::string&, double, double)
+    DECLARE_EVENT(PictureMoved, double dx, double dy)
+    DECLARE_EVENT(ColorChanged, const std::string&, Color)
+    DECLARE_EVENT(ShapeDeleted, const std::string&)
+    DECLARE_EVENT(ShapeGeometryChanged, const std::string&, ShapeGeometry*)
 public:
-
     explicit Picture(std::unique_ptr<gfx::ICanvas> canvas);
     void DrawPicture() noexcept;
     void DrawShape(const std::string& ID);
@@ -36,8 +39,10 @@ public:
     void ChangeShape(const std::string& ID, std::unique_ptr<ShapeGeometry> newGeometry);
     void CloneShape(const std::string& ID, const std::string& newID);
     Picture Clone(std::unique_ptr<gfx::ICanvas> canvas);
+
 private:
     std::map<std::string, std::unique_ptr<Shape>> m_doodles;
+    std::map<std::string, std::vector<Subscription>> m_shapeSubscriptions;
     std::unique_ptr<gfx::ICanvas> m_canvas;
 };
 

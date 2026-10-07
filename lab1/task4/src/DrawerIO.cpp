@@ -26,10 +26,6 @@ void PrintErrorSignature(const std::string& signature) {
 DrawerIO::DrawerIO() {
     shapes::Picture picture(std::make_unique<gfx::SVGCanvas>(GenerateFileName(), 1920, 1080));
     m_picture = std::make_unique<shapes::Picture>(std::move(picture));
-
-    m_subOnShapeAdded = m_picture->SubscribeOnShapeAdded([](const shapes::Shape& shape) {
-       std::cout << "Shape was added\n" << shape.GetTypeName() << std::endl;
-    });
 }
 
 void DrawerIO::HandleInput(const std::vector<std::string>& tokens) const {
